@@ -1,0 +1,22 @@
+# Secrets — NEVER commit real API keys
+.env
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Kiro / agent working files
+.agents/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Local report exports
+*.md
+!README.md
+
+# Persisted run history for change tracking
+runs/
