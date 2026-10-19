@@ -1,0 +1,18 @@
+# Install with:  pip install -r requirements.txt
+streamlit>=1.46        # the app's screen
+pandas>=2.0            # tables in the app
+pydantic>=2.0          # validates the AI's structured output
+python-dotenv>=1.0     # loads keys from .env so they never go in the code
+
+# --- reading sources (all open source) ---
+requests>=2.31         # downloads pages (with our own politeness rules on top)
+trafilatura>=1.12      # extracts the main text from a web page
+pypdf>=5.0             # reads text from PDFs
+ddgs>=9.0              # DuckDuckGo search for discovering new official documents, no API key
+
+# --- AI providers (only the one you use needs a key) ---
+google-genai>=1.0      # Google Gemini (free key from aistudio.google.com)
+boto3>=1.40            # Amazon Bedrock (Nova / Claude), once your AWS account is active
+
+# --- MCP server (sources_server.py) ---
+mcp>=1.9,<2            # pinned to v1: most tutorials (and our code) use the v1 "FastMCP" API

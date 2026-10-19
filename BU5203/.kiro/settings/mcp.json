@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "liability-radar-sources": {
+      "command": "python",
+      "args": ["sources_server.py"],
+      "disabled": false,
+      "autoApprove": ["list_trusted_sources", "find_relevant_passages"]
+    }
+  }
+}
