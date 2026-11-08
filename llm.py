@@ -72,6 +72,25 @@ def parse_json(text: str):
 # ===========================================================================
 # 1. One question -> one JSON answer
 # ===========================================================================
+def generate(client, **kwargs):
+    """client.models.generate_content with a short retry for TEMPORARY failures.
+
+    LESSON LEARNED (live run): "ServerError" = Google's servers were busy (HTTP 5xx), and
+    429 = rate limit (common on the free tier). Both usually clear within seconds, so we
+    wait and try again (2s, then 6s) instead of losing that step. Real errors - a wrong
+    model name (404), a bad key - are not retried: they fail at once with their message."""
+    import time
+    from google.genai import errors
+    for wait in (2, 6, None):
+        try:
+            return client.models.generate_content(**kwargs)
+        except errors.APIError as e:
+            temporary = isinstance(e, errors.ServerError) or getattr(e, "code", None) == 429
+            if not temporary or wait is None:
+                raise
+            time.sleep(wait)
+
+
 def _gemini_text(system: str, prompt: str, json_mode: bool) -> str:
     from google import genai
     from google.genai import types
@@ -79,7 +98,7 @@ def _gemini_text(system: str, prompt: str, json_mode: bool) -> str:
     client = genai.Client(api_key=config.GEMINI_API_KEY)
     cfg = types.GenerateContentConfig(system_instruction=system, temperature=0.1,
                                       response_mime_type="application/json" if json_mode else None)
-    return client.models.generate_content(model=config.GEMINI_MODEL, contents=prompt, config=cfg).text or ""
+    return generate(client, model=config.GEMINI_MODEL, contents=prompt, config=cfg).text or ""
 
 
 def _bedrock_text(system: str, prompt: str) -> str:
@@ -165,7 +184,7 @@ def _gemini_agent(system, task, tools, functions, max_turns, trace) -> str:
     contents = [types.Content(role="user", parts=[types.Part(text=task)])]
     for turn in range(1, max_turns + 1):
         _count_call()
-        response = client.models.generate_content(model=config.GEMINI_MODEL, contents=contents, config=cfg)
+        response = generate(client, model=config.GEMINI_MODEL, contents=contents, config=cfg)
         calls = response.function_calls or []
         if not calls:
             return response.text or ""
@@ -186,7 +205,7 @@ def _force_final(contents, cfg, client, trace) -> str:
     contents.append(types.Content(role="user", parts=[types.Part(
         text="You have used all your turns. Give your final JSON answer now with what you have.")]))
     final_cfg = types.GenerateContentConfig(system_instruction=cfg.system_instruction, temperature=0.2)
-    return client.models.generate_content(model=config.GEMINI_MODEL, contents=contents, config=final_cfg).text or ""
+    return generate(client, model=config.GEMINI_MODEL, contents=contents, config=final_cfg).text or ""
 
 
 def _bedrock_agent(system, task, tools, functions, max_turns, trace) -> str:

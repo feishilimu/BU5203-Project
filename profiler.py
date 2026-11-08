@@ -124,9 +124,13 @@ def profile_offline(doc: dict, passages: list[dict], pack: dict) -> Profile:
 
 
 def _fill_status(p: Profile) -> Profile:
-    """If status is unknown but we have an effective date, work it out from today's date."""
+    """Status from TODAY's date whenever there is an effective date.
+
+    LESSON LEARNED (live run): the AI wrote "upcoming" for rules that started 68 days ago -
+    true when the document was written, wrong today. Consultations and repealed rules keep
+    their status; for everything else the effective date decides."""
     days = dates.days_until(p.effective_date)
-    if p.status == "unknown" and days is not None:
+    if days is not None and p.status in ("unknown", "upcoming", "in force"):
         p.status = "upcoming" if days > 0 else "in force"
     return p
 

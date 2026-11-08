@@ -420,6 +420,27 @@ def test_live_run_lessons():
     rec2["documents"] = [{"id": "st", "jurisdiction": "Singapore", "title": "Brief", "kind": "statistics", "stats": [],
                           "profile": {"relevance": "not relevant"}, "review": None}]
     assert report.included(rec2), "'not relevant' to the rules must not hide a statistics brief"
+    # UK periods (live run: ONS "year ending March 2025" figures were never charted).
+    assert stats.period_key("year ending March 2025") == ("year to Mar", 2025, 0)
+    assert stats.period_key("2024/25") == ("financial year", 2025, 0)
+    uk = [{"metric": "number of incidents", "category": "Fraud", "unit": "", "period": per, "value": v,
+           "verified": True, "jurisdiction": "United Kingdom", "source_id": "ons"}
+          for per, v in [("year ending March 2024", 3.2e6), ("year ending March 2025", 4.2e6)]]
+    uk_row = stats.trends(uk)[0]
+    assert round(uk_row["pct"]) == 31, "matches the ONS headline (+31%)"
+    assert tidy("number of cases", "Tiktok", "")["metric"] == "number of cases by contact channel"
+    # Australia: reporting sources are not scam types; "Combined losses" is the total; "On X" is a channel.
+    assert tidy("amount lost", "Scamwatch", "AUD")["metric"] == "amount lost by reporting source"
+    assert tidy("amount lost", "Combined losses", "AUD")["category"] == "Total"
+    assert tidy("number of cases", "On Carousell", "")["category"] == "Carousell"
+    au = stats.tidy({"metric": "amount lost", "category": "Remote access", "unit": "SGD", "period": "2025",
+                     "value": 1, "jurisdiction": "Australia", "source_id": "x"}, pack)
+    assert au["unit"] == "AUD", "another country's dollar in an Australian report is the AI's slip"
+    assert tidy("number of cases", "Adjustments", "")["category"] == "Adjustment"
+    import models
+    old_news = models.Profile(status="upcoming", effective_date="1 September 2025")
+    assert profiler._fill_status(old_news).status == "in force", "status follows today's date"
+    assert profiler._fill_status(models.Profile(status="consultation", effective_date="1 September 2025")).status == "consultation"
     assert dates.stated_in("31 December 2021", "comes into operation on 31/12/2021"), "day-first numeric dates count"
     assert not dates.stated_in("31 December 2021", "comes into operation on 30/12/2021")
     cell = report.cell_text([{"answer": "3 days.", "ref": "SG-4", "evidence_found": False},

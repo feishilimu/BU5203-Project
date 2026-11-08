@@ -26,7 +26,7 @@ From the passages, list every figure about the topic as a data point:
   period   - exactly as written: "2025", "H1 2026", "January to June 2025", "Q3 2024"
   value    - the number exactly as written in the text, e.g. "41,974", "913.1", "24.8"
   scale    - "", "thousand", "million" or "billion" if the text says so
-  unit     - "cases", "SGD", "GBP", "AUD", "HKD", "INR", "%", "reports", ...
+  unit     - "cases", "%", "reports", or the currency code of the amount (see "Local currency")
   page     - page number of the passage
   quote    - the short exact phrase containing the number
 RULES: only figures written in the passages - never calculate, estimate or use memory.
@@ -89,7 +89,10 @@ def number_in_text(value: str, text: str) -> bool:
 def extract(doc: dict, pack: dict, notes: list) -> list[dict]:
     """AI-extracted, code-verified data points for one statistics document."""
     passages = stat_passages(doc)
+    local = CURRENCY.get(doc["jurisdiction"], "")
     prompt = (f"Topic: {pack['name']}\nJurisdiction: {doc['jurisdiction']}\n"
+              + (f"Local currency: {local} (a plain '$' amount in this document is {local})\n" if local else "")
+              + 
               f"Metrics of interest: {', '.join(pack['statistics']['metrics_hint'])}\n"
               f"Typical categories: {pack['statistics']['category_hint']}\n\n"
               + "\n".join(reading.as_untrusted_block(p) for p in passages))
@@ -140,8 +143,14 @@ CURRENCY = {"Singapore": "SGD", "Hong Kong": "HKD", "Australia": "AUD", "Malaysi
             "Indonesia": "IDR", "United Kingdom": "GBP", "Taiwan": "TWD", "China": "CNY", "Thailand": "THB"}
 # How scammers reached victims - a different breakdown from scam TYPE, so never mixed with it.
 _CHANNEL = re.compile(r"\b(platforms?|websites?|social media|phone calls?|calls|messaging|sms|e-?mail|"
-                      r"contact (method|channel)|whatsapp|telegram|facebook|instagram|carousell)\b", re.I)
+                      r"contact (method|channel)|whatsapp|telegram|facebook|instagram|carousell|tiktok|"
+                      r"shopee|lazada|wechat|line|signal|dating apps?)\b", re.I)
+# WHO collected the reports (Australia's NASC report splits losses by Scamwatch, ReportCyber,
+# AFCX, IDCARE, ASIC...). A reporting source is not a scam type, so it gets its own breakdown.
+_REPORT_SOURCE = re.compile(r"\b(scamwatch|report\s?cyber|afcx|idcare|asic|accc|action fraud|cifas|"
+                            r"uk finance|nfib|report fraud)\b", re.I)
 _TYPE_WORDS = re.compile(r"\b(impersonation|scams?|fraud|phishing|investment|job|loan|love)\b", re.I)
+_DOLLARS = {"SGD", "AUD", "HKD", "NZD", "TWD"}
 _COUNT_UNITS = {"", "case", "cases", "number", "count", "no.", "reports", "report"}
 
 
@@ -164,6 +173,11 @@ def tidy(point: dict, pack: dict) -> dict:
     currency = CURRENCY.get(point["jurisdiction"], "")
     if unit.lower() in ("$", "s$", "hk$", "a$", "rm", "£", "₹", "rs", "dollars", currency.lower()) and currency:
         unit = currency
+    elif unit.upper() in _DOLLARS and currency in _DOLLARS and unit.upper() != currency:
+        # LESSON LEARNED (live run): the AI labelled Australian losses "SGD", copying an example
+        # from its instructions; the 2025 figures then split off into their own series.
+        # Another country's dollar inside a document about THIS country is almost always that slip.
+        unit = currency
     elif unit.lower() in _COUNT_UNITS:
         unit = "cases" if "case" in metric else ""
     if unit == "%" and not metric.startswith(("share", "percent", "proportion")):
@@ -179,16 +193,20 @@ def tidy(point: dict, pack: dict) -> dict:
         for name in pack["statistics"]["metrics_hint"]:                  # re-match the cleaned metric
             if _core(metric) == _core(name):
                 metric = name
-    if re.search(r"\b(per case|average|median|mean)\b", raw_cat, re.I):
+    if re.search(r"\b(adjustments?|duplicates?|de-?duplicat\w*|reconcil\w*)\b", raw_cat, re.I):
+        metric, side, raw_cat = f"{metric} (adjustment)", True, "Adjustment"   # bookkeeping, not a scam type
+    elif _REPORT_SOURCE.search(raw_cat) and not _TYPE_WORDS.search(raw_cat):
+        metric, side = f"{metric} by reporting source", True
+    elif re.search(r"\b(per case|average|median|mean)\b", raw_cat, re.I):
         metric, side, raw_cat = f"{metric} ({raw_cat.lower()})", True, "Total"
-    elif via_in_metric or re.match(r"(via|through|by)\s", raw_cat, re.I) or (
+    elif via_in_metric or re.match(r"(via|through|by|on)\s", raw_cat, re.I) or (
             _CHANNEL.search(raw_cat) and not _TYPE_WORDS.search(raw_cat)):   # "Social media impersonation" is a TYPE
         metric, side = f"{metric} by contact channel", True
-        raw_cat = re.sub(r"^(via|through|by)\s+|\s*contact (method|channel)s?$", "", raw_cat, flags=re.I)
+        raw_cat = re.sub(r"^(via|through|by|on)\s+|\s*contact (method|channel)s?$", "", raw_cat, flags=re.I)
         raw_cat = re.sub(r"\s+platforms?$", "", raw_cat, flags=re.I) or raw_cat   # "Social media platforms" = "Social media"
-    words = re.sub(r"\b(scams?|total|overall|all|cases?)\b", " ", raw_cat, flags=re.I).split()
+    words = re.sub(r"\b(scams?|total|overall|all|cases?|combined)\b", " ", raw_cat, flags=re.I).split()
     category = " ".join(words)
-    if not category or category.lower() in ("types", "cases"):
+    if not category or category.lower() in ("types", "cases", "losses", "loss", "reports", "amount"):
         category = "Total"
     elif category.lower().startswith(("and ", "incl. ", "including ")):   # "Total scam AND cybercrime"
         category = "Total incl. " + category.split(" ", 1)[1]
@@ -200,7 +218,9 @@ def tidy(point: dict, pack: dict) -> dict:
     key = period_key(point["period"])
     period = point["period"]
     if key:
-        period = {"year": f"{key[1]}", "half-year": f"H{key[2]} {key[1]}", "quarter": f"Q{key[2]} {key[1]}"}[key[0]]
+        period = ({"year": f"{key[1]}", "half-year": f"H{key[2]} {key[1]}", "quarter": f"Q{key[2]} {key[1]}",
+                   "financial year": f"FY{key[1] - 1}/{str(key[1])[2:]}"}.get(key[0])
+                  or f"YE {key[0].split()[-1]} {key[1]}")             # "year to Mar" -> "YE Mar 2025"
     return {**point, "metric": metric, "unit": unit, "category": category, "headline": headline,
             "period": period, "period_as_written": point["period"]}
 
@@ -215,6 +235,14 @@ def period_key(period: str) -> tuple[str, int, int] | None:
     if not year:
         return None
     y = int(year.group())
+    # UK-style periods (live run: the ONS writes "year ending March 2025"; nothing was charted).
+    # Kept as their OWN granularity, so they're never mixed with calendar years.
+    if m := re.search(r"(?:year end(?:ing|ed)|ye)\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+((?:19|20)\d\d)", p):
+        return (f"year to {m.group(1).capitalize()}", int(m.group(2)), 0)
+    if m := re.search(r"\b(?:fy\s*)?((?:19|20)\d\d)\s*[/-]\s*(\d{2}|(?:19|20)\d\d)\b", p):
+        start, end = int(m.group(1)), int(m.group(2)[-2:])
+        if (start + 1) % 100 == end:                          # 2024/25, 2024-25, FY2024/25
+            return ("financial year", start + 1, 0)
     if m := re.search(r"\bh([12])\b|\b([12])h\b|\b(first|1st|second|2nd) half", p):
         part = m.group(1) or m.group(2)
         return ("half-year", y, int(part) if part else (1 if m.group(3) in ("first", "1st") else 2))
@@ -238,7 +266,8 @@ def _recency(points: list[dict]) -> dict:
     out: dict = {}
     for p in points:
         if k := period_key(p["period"]):
-            out[p["source_id"]] = max(out.get(p["source_id"], (0, 0)), (k[1], rank[k[0]](k[2])))
+            part = rank.get(k[0], lambda _: 4)(k[2])          # year-type periods (FY, YE Mar) rank as a full year
+            out[p["source_id"]] = max(out.get(p["source_id"], (0, 0)), (k[1], part))
     return out
 
 

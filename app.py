@@ -167,6 +167,16 @@ def render_find_sources():
         a = ss.access.get(r["url"])
         if a:
             return a["label"], a["file"]
+        # Already tried while reading? Then we know the answer without checking again.
+        rec_now = ss.get("record")
+        if rec_now and rec_now.get("topic") == topic_id:
+            tried = [x for x in rec_now["access_log"] if x.get("url") == r["url"]]
+            if tried:
+                status = tried[-1].get("status")
+                if status in sources.FAILED_STATUSES:
+                    return "⬇️ download by hand", tried[-1].get("suggested_file") or sources.suggested_filename(r)
+                if status in ("ok", "cached", "library"):
+                    return "✅ read", ""
         if r.get("needs_manual_download"):                              # the agent's preview said so
             return "⬇️ download by hand", sources.suggested_filename(r)
         return "not checked yet", ""
@@ -231,6 +241,10 @@ def render_find_sources():
             st.rerun()
 
     st.divider()
+    if len(chosen) > config.MAX_DOCUMENTS_PER_RUN:
+        st.warning(f"⚠️ {len(chosen)} ticked, but one run reads at most {config.MAX_DOCUMENTS_PER_RUN} "
+                   f"(cost and review limit). The last {len(chosen) - config.MAX_DOCUMENTS_PER_RUN} would be skipped - "
+                   "untick the ones you need least.")
     if st.button(f"▶ Read and profile {len(chosen)} document(s)", type="primary", disabled=not chosen):
         llm.calls_made = 0
         new = pipeline.new_record(topic_id, jurisdictions)
@@ -310,6 +324,13 @@ def render_key_dates():
     soon = [r for r in rows if r["_days"] is not None and 0 <= r["_days"] <= config.EFFECTIVE_SOON_DAYS]
     m = st.columns(4)
     m[0].metric("Documents", len(rows))
+    tried = {a.get("url") or a.get("id") for a in rec["access_log"]}
+    failed = len(pipeline.manual_downloads_needed(rec))
+    hidden = len(rec["documents"]) - len(rows)
+    skipped = sum(1 for n in rec["notes"] if "were read (limit)" in str(n.get("note", "")))
+    m[0].caption(f"{len(tried)} sources tried · {len(rec['documents'])} read · {failed} couldn't be read"
+                 + (f" · {hidden} hidden (rejected / not relevant)" if hidden else "")
+                 + (" · some skipped (over the 15 limit)" if skipped else ""))
     m[1].metric(f"Effective within {config.EFFECTIVE_SOON_DAYS} days", len(soon))
     m[2].metric("Dates verified in document",
                 sum(1 for d in rec["documents"] for v in d["profile"].get("dates_verified", {}).values() if v))

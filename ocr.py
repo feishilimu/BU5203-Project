@@ -70,7 +70,7 @@ def _transcribe_chunk(pdf_chunk: bytes) -> tuple[str, str]:
     cfg = types.GenerateContentConfig(system_instruction=SYSTEM, temperature=0, max_output_tokens=32000)
     parts = [types.Part.from_bytes(data=pdf_chunk, mime_type="application/pdf"),
              "Transcribe every page of this file."]
-    r = client.models.generate_content(model=config.GEMINI_MODEL, contents=parts, config=cfg)
+    r = llm.generate(client, model=config.GEMINI_MODEL, contents=parts, config=cfg)   # retries busy-server errors
     # WHY a reply can be empty: Gemini may stop with RECITATION (it won't reproduce long published
     # text word for word), SAFETY, or a blocked prompt. We keep the reason so the app can say so.
     reason = ""
