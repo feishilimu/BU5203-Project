@@ -1,0 +1,18 @@
+# Install with:  pip install -r requirements.txt
+streamlit>=1.46        # the app's screen (includes altair for the timeline chart)
+pandas>=2.0
+pydantic>=2.0          # validates the AI's structured output
+python-dotenv>=1.0     # loads keys from .env
+
+# --- reading sources (all open source) ---
+requests>=2.31
+trafilatura>=1.12      # main text of web pages
+pypdf>=5.0             # text of PDFs
+ddgs>=9.0              # DuckDuckGo search (the discovery agent's search tool), no API key
+
+# --- AI providers (only the one you use needs a key) ---
+google-genai>=1.0      # Google Gemini, incl. tool calling for the agent
+boto3>=1.40            # Amazon Bedrock, once your AWS account is active
+
+# --- MCP server (sources_server.py) ---
+mcp>=1.9,<2            # v1 "FastMCP" API

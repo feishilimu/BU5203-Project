@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "regradar-sources": {
+      "command": "C:/PATH/TO/YOUR/PROJECT/venv/Scripts/python.exe",
+      "args": ["C:/PATH/TO/YOUR/PROJECT/sources_server.py"],
+      "disabled": false,
+      "autoApprove": ["list_topics", "list_domains"]
+    }
+  }
+}
