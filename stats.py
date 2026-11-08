@@ -144,12 +144,12 @@ CURRENCY = {"Singapore": "SGD", "Hong Kong": "HKD", "Australia": "AUD", "Malaysi
 # How scammers reached victims - a different breakdown from scam TYPE, so never mixed with it.
 _CHANNEL = re.compile(r"\b(platforms?|websites?|social media|phone calls?|calls|messaging|sms|e-?mail|"
                       r"contact (method|channel)|whatsapp|telegram|facebook|instagram|carousell|tiktok|"
-                      r"shopee|lazada|wechat|line|signal|dating apps?)\b", re.I)
+                      r"shopee|lazada|wechat|line|signal|dating apps?|text messages?)\b", re.I)
 # WHO collected the reports (Australia's NASC report splits losses by Scamwatch, ReportCyber,
 # AFCX, IDCARE, ASIC...). A reporting source is not a scam type, so it gets its own breakdown.
 _REPORT_SOURCE = re.compile(r"\b(scamwatch|report\s?cyber|afcx|idcare|asic|accc|action fraud|cifas|"
                             r"uk finance|nfib|report fraud)\b", re.I)
-_TYPE_WORDS = re.compile(r"\b(impersonation|scams?|fraud|phishing|investment|job|loan|love)\b", re.I)
+_TYPE_WORDS = re.compile(r"\b(impersonation|phishing|investment|job|loan|love|romance|e-?commerce)\b", re.I)
 _DOLLARS = {"SGD", "AUD", "HKD", "NZD", "TWD"}
 _COUNT_UNITS = {"", "case", "cases", "number", "count", "no.", "reports", "report"}
 
@@ -182,7 +182,7 @@ def tidy(point: dict, pack: dict) -> dict:
         unit = "cases" if "case" in metric else ""
     if unit == "%" and not metric.startswith(("share", "percent", "proportion")):
         metric = "share of " + metric
-    raw_cat = point["category"].strip()
+    raw_cat = re.sub(r"^(scams?|fraud)\s+(?=(via|through|by|on)\s)", "", point["category"].strip(), flags=re.I)  # "Scams on X"
     # A breakdown that isn't a category of the THING (scam type) belongs in the metric:
     #   "per case" / "average" / "median"  -> an average, not a scam type
     #   "via social media" / "through ..."  -> a contact channel, a different breakdown
@@ -205,7 +205,8 @@ def tidy(point: dict, pack: dict) -> dict:
         raw_cat = re.sub(r"^(via|through|by|on)\s+|\s*contact (method|channel)s?$", "", raw_cat, flags=re.I)
         raw_cat = re.sub(r"\s+platforms?$", "", raw_cat, flags=re.I) or raw_cat   # "Social media platforms" = "Social media"
     words = re.sub(r"\b(scams?|total|overall|all|cases?|combined)\b", " ", raw_cat, flags=re.I).split()
-    category = " ".join(words)
+    category = re.sub(r"\(\s*\)", "", " ".join(words)).strip()                      # "Investment ( )" -> "Investment"
+    category = re.sub(r"^(incl\.?|including)\s+(and\s+)?", "and ", category, flags=re.I)  # "incl. and X" -> "and X"
     if not category or category.lower() in ("types", "cases", "losses", "loss", "reports", "amount"):
         category = "Total"
     elif category.lower().startswith(("and ", "incl. ", "including ")):   # "Total scam AND cybercrime"
@@ -282,6 +283,8 @@ def series(points: list[dict]) -> dict:
     period, the NEWER document wins: agencies revise past figures (see revisions())."""
     out: dict = {}
     for p in _newest_first(points):
+        if p["metric"].endswith("(adjustment)"):     # bookkeeping lines are kept, but never trended
+            continue
         key = period_key(p["period"]) if p.get("verified") else None
         if not key:
             continue
@@ -298,7 +301,7 @@ def revisions(points: list[dict], tolerance: float = 0.0) -> list[dict]:
     an auditor should know a figure was revised rather than have it silently replaced."""
     groups: dict = {}
     for p in _newest_first(points):
-        k = period_key(p["period"]) if p.get("verified") else None
+        k = period_key(p["period"]) if p.get("verified") and not p["metric"].endswith("(adjustment)") else None
         if k:
             groups.setdefault((p["jurisdiction"], p["metric"], p["unit"], p["category"], k), []).append(p)
     out, seen = [], set()

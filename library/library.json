@@ -271,5 +271,31 @@
     "why": "Added by hand to the library.",
     "added_by": "",
     "added_at": "2026-11-08T02:09:21+00:00"
+  },
+  {
+    "id": "lib-c8b21d15",
+    "topic": "scams",
+    "jurisdiction": "Australia",
+    "title": "Competition and Consumer (Scams Prevention Framework\u2014External Dispute Resolution) Authorisation 2026",
+    "url": "https://www.legislation.gov.au/F2026L00685/asmade/text",
+    "local_file": "AU_competition-and-consumer-scams-prevention-fra_b06e29.pdf",
+    "official": true,
+    "kind": "rule",
+    "why": "Added by hand to the library.",
+    "added_by": "",
+    "added_at": "2026-11-08T05:06:30+00:00"
+  },
+  {
+    "id": "lib-30ec2890",
+    "topic": "scams",
+    "jurisdiction": "Australia",
+    "title": "National Anti-Scam Centre Targeting Scams Report 2024",
+    "url": "https://www.accc.gov.au/about-us/publications/serial-publications/targeting-scams-reports-on-scams-activity/targeting-scams-report-of-the-national-anti-scam-centre-on-scams-data-and-activity-2024",
+    "local_file": "AU_national-anti-scam-centre-targeting-scams-rep_90e17b.pdf",
+    "official": true,
+    "kind": "statistics",
+    "why": "Added by hand to the library.",
+    "added_by": "",
+    "added_at": "2026-11-08T05:06:30+00:00"
   }
 ]

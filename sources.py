@@ -130,6 +130,10 @@ def same_document(a: dict, b: dict) -> bool:
         return True
     if a.get("jurisdiction") != b.get("jurisdiction"):
         return False
+    import re
+    years = lambda t: set(re.findall(r"\b(?:19|20)\d\d\b", t or ""))  # noqa: E731
+    if years(a.get("title")) != years(b.get("title")):
+        return False          # "Report 2024" and "Report 2025" are different editions
     wa, wb = _title_words(a.get("title", "")), _title_words(b.get("title", ""))
     return bool(wa and wb) and len(wa & wb) / len(wa | wb) >= 0.6
 
